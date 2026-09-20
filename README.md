@@ -216,6 +216,29 @@ config.yaml     # Standard-Parameter
      -10.1 %**. Konsistent besser als der bisherige Default (PF 1.16/1.02/1.40) und deutlich
      robuster als der reine Aggregat-Bestwert. Als neue Standardwerte übernommen
      (`config.yaml`/`src/backtest.py`).
+  10. **Strategie-Labor: 100 Strategien im Vergleich** (`scripts/run_strategy_lab.py`,
+      `src/strategy_lab.py`, `src/backtest_generic.py`): systematischer Test von 100
+      Strategievarianten gegen die echten 5m-Daten - klassische Indikatoren (SMA/EMA/MACD-
+      Crossover, RSI/Stochastic/Williams-%R/CCI-Mean-Reversion, Bollinger/Donchian/Keltner/
+      ATR-Breakout, ROC-Momentum) sowie ~20 Varianten auf Basis eines **Order-Flow-Imbalance-
+      Proxys** (da keine echten L2-/Tick-Daten vorliegen: `((close-low)-(high-close))/(high-low)
+      * volume` als grobe Näherung für Kauf-/Verkaufsaggression aus der Kerzenstruktur -
+      dokumentiert in `strategy_lab.py`). Alle 100 liefen durch dieselbe einheitliche,
+      einfache Engine (fixer ATR-Stop + R-Vielfaches als Ziel, keine Bestätigungs-/Trend-/
+      Docht-Filter) und wurden wie beim Sweep zuvor nach Split-Robustheit gerankt
+      (min(PF H1, PF H2)).
+      **Ergebnis: Keine der 100 Strategien erreicht einen Profit-Faktor über 1.0 in beiden
+      Zeithälften gleichzeitig** (bester Wert: `roc_mom_20_1.0`, Robustheit 0.93, aber
+      Gesamtrendite -41.8 % durch Übertrading). Die OFI-Proxy-Varianten liegen durchgehend im
+      selben schwachen Bereich (0.72-0.89) wie klassische Indikatoren - kein erkennbarer
+      Zusatznutzen der (approximierten) Order-Flow-Signale gegenüber klassischen Indikatoren.
+      Selbst `fade_baseline` (dasselbe Grundsignal wie die Hauptstrategie, aber ohne deren
+      Bestätigungs-/Trend-/Docht-Filter) bleibt bei Robustheit 0.92 hängen - deutlich unter der
+      vollausgestatteten Fade-Strategie (1.17/1.34). **Schlussfolgerung: Der Hebel für
+      Profitabilität lag nie beim Rohsignal, sondern beim Trade-Management** (Ausbruchs-
+      bestätigung, Ablehnungskerzen-Filter, Trendabgleich, risikofreier Teilausstieg) - genau
+      die in dieser Session entwickelten Bausteine. Vollständige Ergebnistabelle:
+      `results/strategy_lab.csv` (lokal, nicht versioniert).
 
 **Offene Punkte für echte Profitabilität:** Längerer 5m-Datensatz zur saubereren Out-of-Sample-
 Validierung (bisher wurde alles auf demselben 6-Monats-Fenster optimiert, mit Split-Test als
