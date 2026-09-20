@@ -51,16 +51,22 @@ def parse_args():
     p.add_argument("--lookback", type=int, default=cfg.get("lookback", 15))
     p.add_argument("--volume-multiplier", type=float, default=cfg.get("volume_multiplier", 1.5))
     p.add_argument("--atr-period", type=int, default=cfg.get("atr_period", 14))
-    p.add_argument("--atr-multiplier", type=float, default=cfg.get("atr_multiplier", 2.0))
+    p.add_argument("--atr-multiplier", type=float, default=cfg.get("atr_multiplier", 4.0))
     p.add_argument("--ema-fast", type=int, default=cfg.get("ema_fast", 9))
     p.add_argument("--cooldown-bars", type=int, default=cfg.get("cooldown_bars", 0),
                     help="Kerzen Sperrfrist nach einem Trade, bevor ein neuer eröffnet werden darf")
     p.add_argument("--breakout-confirm-bars", type=int, default=cfg.get("breakout_confirm_bars", 3),
                     help="Kerzen, die der Preis jenseits des Ausbruchs-Levels bleiben muss, bevor "
                          "tatsächlich eingestiegen wird (filtert sofort zurückfallende Fehlausbrüche)")
-    p.add_argument("--partial-tp-r-multiple", type=float, default=cfg.get("partial_tp_r_multiple", 1.5),
+    p.add_argument("--partial-tp-r-multiple", type=float, default=cfg.get("partial_tp_r_multiple", 1.0),
                     help="R-Vielfaches der Stop-Distanz, bei dem ein Teil der Position geschlossen "
                          "wird (Gewinn deckt die Stop-Loss-Kosten); Rest-Stop wandert danach auf Breakeven")
+    p.add_argument("--stop-tighten-r-multiple", type=float, default=cfg.get("stop_tighten_r_multiple"),
+                    help="R-Vielfaches, ab dem der Stop frühzeitig (vor dem Teilausstieg) nachgezogen "
+                         "wird; None/weggelassen deaktiviert die Straffung")
+    p.add_argument("--stop-tighten-to-r-multiple", type=float, default=cfg.get("stop_tighten_to_r_multiple", -0.5),
+                    help="Neuer Stop als R-Vielfaches ab Entry, auf den bei stop-tighten-r-multiple "
+                         "nachgezogen wird (z.B. -0.5 = maximal noch 0.5R Verlust)")
     p.add_argument("--trend-timeframe", default=cfg.get("trend_timeframe", "1h"),
                     help="Höherer Zeitrahmen für den Trendfilter, z.B. 15m, 1h, 4h")
     p.add_argument("--trend-ema", type=int, default=cfg.get("trend_ema", 50),
@@ -116,6 +122,8 @@ def run_for_symbol(symbol, args):
         cooldown_bars=args.cooldown_bars,
         breakout_confirm_bars=args.breakout_confirm_bars,
         partial_tp_r_multiple=args.partial_tp_r_multiple,
+        stop_tighten_r_multiple=args.stop_tighten_r_multiple,
+        stop_tighten_to_r_multiple=args.stop_tighten_to_r_multiple,
         trend_timeframe=args.trend_timeframe,
         trend_ema=args.trend_ema,
         vol_lookback=args.vol_lookback,

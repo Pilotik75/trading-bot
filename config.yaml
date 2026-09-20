@@ -13,11 +13,13 @@ max_leverage: 2.5        # Deckelt den automatisch berechneten Hebel
 lookback: 15               # Kerzen für Range- und Volumen-Durchschnitt
 volume_multiplier: 1.5    # Volumen-Spitze = Volumen > 1.5x Durchschnitt
 atr_period: 14
-atr_multiplier: 2.0       # Stop-Distanz = ATR * Multiplikator
+atr_multiplier: 4.0       # Stop-Distanz = ATR * Multiplikator
 ema_fast: 9                # Für Gegenbewegungs-/Reversal-Erkennung
 cooldown_bars: 0            # keine Sperrfrist
 breakout_confirm_bars: 3   # Preis muss 3 Kerzen jenseits des Ausbruchs-Levels bleiben, bevor eingestiegen wird
-partial_tp_r_multiple: 1.5  # bei 1.5R Gewinn: Teil schließen (deckt Stop-Loss-Kosten), Rest-Stop auf Breakeven
+partial_tp_r_multiple: 1.0  # bei 1R Gewinn: Teil schließen (deckt Stop-Loss-Kosten), Rest-Stop auf Breakeven
+stop_tighten_r_multiple: null    # deaktiviert (bei diesem breiten Stop/Ziel kein Zusatznutzen gefunden)
+stop_tighten_to_r_multiple: -0.5
 
 trend_timeframe: "1h"       # höherer Zeitrahmen für den Trendfilter
 trend_ema: 50                 # EMA-Periode auf dem höheren Zeitrahmen

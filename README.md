@@ -6,6 +6,12 @@ mit dem übergeordneten Trend und bei echter Volatilitätsexpansion. Standard-Ze
 **5-Minuten** (deutlich robuster als 1-Minuten, siehe "Hinweise" unten) — der `timeframe`-Parameter
 bleibt frei wählbar.
 
+**Ehrlicher Status (siehe "Hinweise" unten für die volle Historie):** Auf einem echten
+Train/Test-Split über 2,5 Jahre 5m-Daten pendelt die Strategie um **Profit-Faktor ~1.0
+(Break-even)** — kein belastbarer, robuster Edge, aber auch kein klarer Verlierer. Frühere
+Meldungen eines Profit-Faktors von 1.27 basierten auf einem zu kurzen 6-Monats-Testfenster und
+haben sich mit mehr Daten nicht bestätigt.
+
 ## Strategie
 
 - **Einstiegs-Kandidat**: Volumenspitze (aktuelles Volumen > `volume_multiplier` × Durchschnittsvolumen
@@ -116,11 +122,13 @@ config.yaml     # Standard-Parameter
 | `lookback` | 15 | Kerzen für Range-Hoch/Tief und Volumen-Durchschnitt |
 | `volume_multiplier` | 1.5 | Volumen-Spitze = Volumen > n × Durchschnitt |
 | `atr_period` | 14 | Perioden für ATR-Berechnung |
-| `atr_multiplier` | 2.0 | Stop-Distanz = ATR × Multiplikator |
+| `atr_multiplier` | 4.0 | Stop-Distanz = ATR × Multiplikator |
 | `ema_fast` | 9 | EMA-Periode zur Gegenbewegungs-Erkennung |
 | `cooldown_bars` | 0 | Sperrfrist (in Kerzen) nach einem Trade, bevor ein neuer eröffnet wird |
 | `breakout_confirm_bars` | 3 | Kerzen, die der Preis jenseits des Levels bleiben muss, bevor eingestiegen wird |
-| `partial_tp_r_multiple` | 1.5 | R-Vielfaches der Stop-Distanz für den Teilausstieg (Breakeven-Trigger) |
+| `partial_tp_r_multiple` | 1.0 | R-Vielfaches der Stop-Distanz für den Teilausstieg (Breakeven-Trigger) |
+| `stop_tighten_r_multiple` | deaktiviert | R-Vielfaches, ab dem der Stop vor dem Teilausstieg nachgezogen wird |
+| `stop_tighten_to_r_multiple` | -0.5 | Neuer Stop (als R-Vielfaches) bei `stop_tighten_r_multiple` |
 | `trend_timeframe` | "1h" | Höherer Zeitrahmen für den Trendfilter |
 | `trend_ema` | 50 | EMA-Periode auf dem höheren Zeitrahmen |
 | `vol_lookback` | 100 | Kerzen für den langfristigen ATR-Schnitt (Volatilitäts-Regime) |
@@ -239,14 +247,42 @@ config.yaml     # Standard-Parameter
       bestätigung, Ablehnungskerzen-Filter, Trendabgleich, risikofreier Teilausstieg) - genau
       die in dieser Session entwickelten Bausteine. Vollständige Ergebnistabelle:
       `results/strategy_lab.csv` (lokal, nicht versioniert).
+  11. **Stop-Straffung + echter Train/Test-Split auf 2,5 Jahren Daten** (899 Tage 5m-Daten statt
+      der bisherigen 6 Monate): Zwei Erweiterungen gleichzeitig getestet.
+      - **Neuer Mechanismus** `stop_tighten_r_multiple`/`stop_tighten_to_r_multiple`: Erreicht der
+        Preis schon vor dem Teilausstieg eine kleinere Gewinnschwelle (z.B. 0.75R), wird der Stop
+        von der vollen Anfangs-Distanz auf einen kleineren Verlust (z.B. -0.5R) nachgezogen -
+        reduziert die Verlustgröße bei Trades, die kurz anlaufen und dann doch scheitern, bevor sie
+        den vollen Teilausstieg erreichen. An einem konstruierten Beispiel verifiziert: identischer
+        Trade endet mit -1R (-201) ohne die Funktion, aber nur -0.5R (-105) mit ihr.
+      - **Echter Train/Test-Split**: Erste 70 % (628 Tage) als Dev-Set zum Tunen, letzte 30 %
+        (270 Tage) komplett ungesehen als finaler Test - nicht nur die interne Halbierung wie
+        zuvor. **Ergebnis, das die bisherigen Zahlen relativiert:** Die vorher "beste" Kombination
+        (`atr_mult=2.0, partial_r=1.5`, PF 1.27 auf 6 Monaten) liefert auf den vollen 628 Dev-Tagen
+        nur noch PF 0.88 (beide Hälften <1.0) - der frühere Erfolg war selbst noch zu sehr auf das
+        kleinere Zeitfenster zugeschnitten, der interne Split-Test allein reichte nicht, weil beide
+        Hälften aus demselben Marktregime stammten.
+      - **98 Kombinationen** (`atr_multiplier` × `partial_tp_r_multiple` × `stop_tighten_r_multiple`)
+        auf den 628 Dev-Tagen getestet - **keine einzige erreicht einen robusten Profit-Faktor über
+        1.0 in beiden Hälften gleichzeitig.** Bester Fund: `atr_multiplier=4.0,
+        partial_tp_r_multiple=1.0` (Stop-Straffung bringt hier keinen Zusatznutzen mehr, da das
+        Ziel schon nah am Stop liegt) - Dev gesamt PF 0.97, Dev-H1 0.92, Dev-H2 1.05.
+      - **Finale Validierung auf dem nie angefassten Test-Zeitraum** (270 Tage): PF 1.02,
+        Trefferquote 54.0 %, Gesamtrendite -5.7 %. Auf dem **kompletten** 2,5-Jahres-Datensatz
+        (899 Tage, 301 Trades): **PF 0.99, Gesamtrendite -21.6 %**. Als neue Standardwerte
+        übernommen (`config.yaml`/`src/backtest.py`).
 
-**Offene Punkte für echte Profitabilität:** Längerer 5m-Datensatz zur saubereren Out-of-Sample-
-Validierung (bisher wurde alles auf demselben 6-Monats-Fenster optimiert, mit Split-Test als
-Notbehelf — ein drittes, komplett ungesehenes Fenster wäre die eigentliche Bestätigung). Die
-Inside-Bar-Strategie legt außerdem nahe, dass Follow-Ansätze auf kurzen Zeitrahmen grundsätzlich
-benachteiligt sind — Fade auf 5m bleibt der vielversprechendste Ansatz. **Wichtige Lektion aus dem
-Sweep:** Bei kleinen Trade-Zahlen (hier 40-70) immer gegen mehrere Zeitfenster prüfen, nicht nur
-den Aggregat-Profit-Faktor optimieren — der beste Einzelwert ist oft der am stärksten überfittete.
+**Ehrliches Gesamtfazit:** Nach allen Verbesserungsrunden dieser Session pendelt die Fade-Strategie
+auf einem echten Train/Test-Split über 2,5 Jahre um **Profit-Faktor 1.0 (Break-even)** - kein
+belastbarer, robuster Edge, aber auch kein klarer Verlierer mehr. Das ist deutlich nüchterner als
+die früheren Zahlen auf kürzeren Zeitfenstern (PF 1.27 auf 6 Monaten), aber ehrlicher: Die
+frühere Erfolgsmeldung war ein Artefakt zu kurzer Testperioden. Die Inside-Bar-Strategie und das
+100-Strategien-Labor legen nahe, dass Follow-Ansätze und rohe Signale generell keinen Edge auf
+diesen Zeitrahmen haben — Fade mit vollem Trade-Management bleibt der am wenigsten schlechte
+Ansatz, aber "profitabel" wäre für den aktuellen Stand übertrieben. **Wichtigste Lektion dieser
+Session:** Bei kleinen Trade-Zahlen und kurzen Testfenstern immer gegen mehrere, möglichst lange
+und wirklich ungesehene Zeiträume prüfen - sowohl der beste Aggregat-Wert als auch ein interner
+Split auf einem zu kurzen Fenster können in die Irre führen.
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der
