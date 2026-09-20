@@ -15,8 +15,14 @@ import pandas as pd
 import yaml
 
 from src.backtest import Backtester
-from src.data import fetch_ohlcv
+from src.data import fetch_ohlcv, load_csv
 from src.metrics import compute_metrics
+
+TIMEFRAME_MINUTES = {
+    "1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30,
+    "1h": 60, "2h": 120, "4h": 240, "6h": 360, "12h": 720,
+    "1d": 1440,
+}
 
 
 def load_config(path="config.yaml"):
@@ -24,6 +30,11 @@ def load_config(path="config.yaml"):
         with open(path) as f:
             return yaml.safe_load(f) or {}
     return {}
+
+
+def bars_per_year(timeframe):
+    minutes = TIMEFRAME_MINUTES.get(timeframe, 1)
+    return (365 * 24 * 60) / minutes
 
 
 def parse_args():
@@ -46,14 +57,27 @@ def parse_args():
     p.add_argument("--fee-pct", type=float, default=cfg.get("fee_pct", 0.0004))
     p.add_argument("--output-dir", default=cfg.get("output_dir", "results"))
     p.add_argument("--no-cache", action="store_true", help="Erzwingt Neu-Download statt lokalem CSV-Cache")
+    p.add_argument("--csv", default=cfg.get("csv"),
+                    help="Lädt OHLCV-Daten aus einer lokalen CSV statt über ccxt (Spalten: "
+                         "timestamp, open, high, low, close, volume). Umgeht den Netzwerkabruf; "
+                         "bei mehreren --symbol wird dieselbe Datei für alle verwendet.")
     return p.parse_args()
 
 
 def run_for_symbol(symbol, args):
-    print(f"Lade Daten für {symbol} ({args.timeframe}, {args.since} bis {args.until or 'jetzt'})...")
-    df = fetch_ohlcv(
-        symbol, args.timeframe, since=args.since, until=args.until, use_cache=not args.no_cache
-    )
+    if args.csv:
+        print(f"Lade Daten für {symbol} aus lokaler CSV: {args.csv} ...")
+        df = load_csv(args.csv)
+        if args.since:
+            df = df[df["timestamp"] >= pd.to_datetime(args.since, utc=True)]
+        if args.until:
+            df = df[df["timestamp"] < pd.to_datetime(args.until, utc=True)]
+        df = df.reset_index(drop=True)
+    else:
+        print(f"Lade Daten für {symbol} ({args.timeframe}, {args.since} bis {args.until or 'jetzt'})...")
+        df = fetch_ohlcv(
+            symbol, args.timeframe, since=args.since, until=args.until, use_cache=not args.no_cache
+        )
     if df.empty:
         print(f"Keine Daten für {symbol} erhalten.")
         return None
@@ -72,7 +96,7 @@ def run_for_symbol(symbol, args):
         fee_pct=args.fee_pct,
     )
     equity_df = bt.run(df)
-    metrics = compute_metrics(bt.trades, equity_df, args.capital)
+    metrics = compute_metrics(bt.trades, equity_df, args.capital, bars_per_year(args.timeframe))
 
     os.makedirs(args.output_dir, exist_ok=True)
     safe_symbol = symbol.replace("/", "")
