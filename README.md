@@ -1,8 +1,10 @@
 # Krypto-Backtesting-Bot: Volumen-Fade-Strategie
 
-Python-Framework zum **Backtesten** (keine Live-Ausführung) einer Mean-Reversion-Strategie auf
-1-Minuten-Kerzen für BTC/USDT und ETH/USDT. Handelt Volumen-Ausbrüche **gegen** ihre eigene
-Richtung (Fade), aber nur mit dem übergeordneten Trend und bei echter Volatilitätsexpansion.
+Python-Framework zum **Backtesten** (keine Live-Ausführung) einer Mean-Reversion-Strategie für
+BTC/USDT und ETH/USDT. Handelt Volumen-Ausbrüche **gegen** ihre eigene Richtung (Fade), aber nur
+mit dem übergeordneten Trend und bei echter Volatilitätsexpansion. Ursprünglich für 1-Minuten-
+Kerzen entwickelt; Backtests zeigen jedoch, dass **5-Minuten-Kerzen deutlich besser funktionieren**
+(siehe "Hinweise" unten) — der `timeframe`-Parameter ist frei wählbar.
 
 ## Strategie
 
@@ -57,6 +59,12 @@ pip install -r requirements.txt
 python -m src.main --symbol BTC/USDT,ETH/USDT \
   --since 2024-06-01T00:00:00Z --until 2024-06-08T00:00:00Z \
   --capital 10000 --risk-pct 0.02 --max-leverage 5
+```
+
+Mit 5-Minuten-Kerzen (siehe "Hinweise" unten - deutlich bessere Ergebnisse als 1m):
+
+```bash
+python -m src.main --symbol BTC/USDT --timeframe 5m --csv data/btcusdt_5m_sample.csv
 ```
 
 Alle Parameter lassen sich auch dauerhaft in `config.yaml` setzen; CLI-Flags überschreiben sie.
@@ -167,11 +175,24 @@ config.yaml     # Standard-Parameter
      1m-Krypto-Rauschen hat reines Ausbruchs-Folgen keinen nachweisbaren Edge, unabhängig von der
      Selektivität des Filters.
 
-**Offene Punkte für echte Profitabilität:** Out-of-Sample-Validierung (bisher wurde alles auf
-demselben 10-Monats-Fenster optimiert — Overfitting-Risiko), sowie ggf. eine Kombination aus
-Erschöpfungsfilter und moderat breiterem Stop. Die Inside-Bar-Strategie legt außerdem nahe, dass
-Follow-Ansätze auf diesem Zeitrahmen grundsätzlich benachteiligt sind — Fade bleibt der
-vielversprechendere Ansatz.
+  7. **Timeframe-Test: 5-Minuten-Kerzen statt 1-Minuten** (dieselbe Fade-Strategie, dieselben
+     Standardparameter, keine Neu-Optimierung): echte BTC/USDT-5m-Daten (6 Monate, 51.840 Kerzen).
+     **64 Trades, Trefferquote 42.2 %, Profit-Faktor 1.16, Gesamtrendite -0.86 %, Max-Drawdown
+     -8.1 %** — zum ersten Mal ein Profit-Faktor über 1 und kein Totalverlust. Zur Kontrolle in
+     zwei Hälften gesplittet (kein Parameter-Retuning): erste Hälfte PF 1.02, zweite Hälfte
+     PF 1.40 — der Effekt zeigt sich in beiden Fenstern, ist also kein Zufallsartefakt eines
+     einzelnen Zeitraums. Naheliegende Erklärung: Auf 5m ist das Verhältnis von echtem
+     Preissignal zu Marktmikrostruktur-Rauschen deutlich günstiger als auf 1m, und die geringere
+     Trade-Zahl reduziert die kumulative Gebührenlast drastisch (64 vs. 1868 Trades im
+     vergleichbaren 1m-Test). Datenbasis mit 179 Tagen / 64 Trades aber weiterhin klein — echte
+     Bestätigung bräuchte einen längeren Zeitraum.
+
+**Offene Punkte für echte Profitabilität:** Längerer 5m-Datensatz zur saubereren Out-of-Sample-
+Validierung (bisher wurde für 1m alles auf demselben 10-Monats-Fenster optimiert —
+Overfitting-Risiko, für 5m liegt bislang nur ein 6-Monats-Fenster vor), sowie ggf. eine
+Kombination aus Erschöpfungsfilter und moderat breiterem Stop auf 5m. Die Inside-Bar-Strategie
+legt außerdem nahe, dass Follow-Ansätze auf kurzen Zeitrahmen grundsätzlich benachteiligt sind —
+Fade auf 5m ist bislang der vielversprechendste Ansatz.
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der
