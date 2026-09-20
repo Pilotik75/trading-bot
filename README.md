@@ -20,6 +20,11 @@ Richtung (Fade), aber nur mit dem übergeordneten Trend und bei echter Volatilit
 - **Ausbruchs-Bestätigung**: Der Kandidat wird erst zum echten Trade, wenn der Preis
   `breakout_confirm_bars` Kerzen in Folge jenseits des ursprünglichen Ausbruchs-Levels bleibt.
   Fällt der Preis vorher zurück, verfällt der Kandidat ohne Trade.
+- **Erschöpfungs-/Ablehnungskerze**: Zusätzlich muss die Bestätigungskerze selbst ein klassisches
+  Preisaktions-Umkehrsignal zeigen — ein Docht gegen die Ausbruchsrichtung, mindestens so groß wie
+  der Kerzenkörper (`wick_body_ratio`). Das filtert echte Erschöpfung (Käufer/Verkäufer wurden
+  zurückgedrängt) von Ausbrüchen, die einfach nur weiterlaufen — deutlich weniger, aber
+  höherwertigere Fade-Setups.
 - **Teilausstieg beim ersten Schub**: Erreicht der Preis `partial_tp_r_multiple` × Stop-Distanz in
   die Gewinnzone, wird so viel der Position geschlossen, dass der realisierte Gewinn genau die
   potenziellen Stop-Loss-Kosten deckt. Der Stop der Restposition wandert danach auf den
@@ -100,6 +105,7 @@ config.yaml     # Standard-Parameter
 | `trend_ema` | 50 | EMA-Periode auf dem höheren Zeitrahmen |
 | `vol_lookback` | 100 | Kerzen für den langfristigen ATR-Schnitt (Volatilitäts-Regime) |
 | `vol_expansion_multiplier` | 1.2 | Nur handeln, wenn ATR > n × langfristiger ATR-Schnitt |
+| `wick_body_ratio` | 1.0 | Mindestverhältnis Docht/Körper der Bestätigungskerze gegen den Ausbruch |
 | `risk_pct` | 0.02 | Kapitalrisiko pro Trade (1–3 % empfohlen) |
 | `max_leverage` | 2.5 | Obergrenze für automatisch berechneten Hebel |
 | `allow_shorts` | true | Short-Einstiege bei Abwärts-Ausbruch zulassen |
@@ -124,9 +130,24 @@ config.yaml     # Standard-Parameter
   3. Mit dem Fix: **1868 Trades, Trefferquote 33.7 %, Profit-Faktor 0.67** (deutliche Verbesserung
      gegenüber der Follow-Strategie, aber noch nicht profitabel). Bottleneck laut Trade-Log: 64 %
      der Trades werden vom Stop-Loss beendet, bevor die Mean-Reversion das 2R-Teilausstiegsziel
-     erreicht — nur 36 % kommen so weit. Mögliche nächste Schritte: weiterer Stop (mehr Raum für
-     die Erholung), niedrigeres `partial_tp_r_multiple`, oder strengere Ausbruchs-/Volatilitäts-
-     Schwellen für höherwertige Fade-Setups.
+     erreicht — nur 36 % kommen so weit.
+  4. Stop/Target-Sweep (36 Kombinationen `atr_multiplier` × `partial_tp_r_multiple`): breiterer
+     Stop + weiteres Ziel verbessern den Profit-Faktor durchgehend (bis 0.89 bei `atr_mult=8,
+     partial_r=4`), aber die Trade-Zahl sinkt dabei auf ~1/Tag (300 Trades) — Risiko, nur Rauschen
+     in diesem einen Datenfenster zu fitten statt einen echten Edge zu finden. Als reines
+     Parameter-Tuning ohne strukturelle Änderung nicht übernommen.
+  5. **Erschöpfungs-/Ablehnungskerzen-Filter** (`wick_body_ratio`, Standardwert 1.0) als
+     strukturelle Verbesserung statt weiterem Parameter-Tuning: Nur Bestätigungskerzen mit einem
+     Docht mindestens in Körpergröße gegen die Ausbruchsrichtung werden gefadet. Bei unveränderten
+     Stop/Target-Werten (1.5×ATR / 2R): **459 Trades, Trefferquote 34.9 %, Profit-Faktor 0.70,
+     Gesamtrendite -57.5 %** (Endkapital 4.250 statt 311 bei sonst gleichen Einstellungen) — der
+     Effekt kommt hauptsächlich über Selektivität (drastisch weniger, aber höherwertige Setups),
+     nicht über eine stark veränderte Trefferquote. Immer noch nicht profitabel (Profit-Faktor < 1),
+     aber die bislang beste strukturelle Verbesserung.
+
+**Offene Punkte für echte Profitabilität:** Out-of-Sample-Validierung (bisher wurde alles auf
+demselben 10-Monats-Fenster optimiert — Overfitting-Risiko), sowie ggf. eine Kombination aus
+Erschöpfungsfilter und moderat breiterem Stop.
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der

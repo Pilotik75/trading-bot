@@ -23,6 +23,7 @@ trend_timeframe: "1h"       # höherer Zeitrahmen für den Trendfilter
 trend_ema: 50                 # EMA-Periode auf dem höheren Zeitrahmen
 vol_lookback: 100             # Kerzen für den langfristigen ATR-Schnitt (Volatilitäts-Regime)
 vol_expansion_multiplier: 1.2  # nur handeln, wenn ATR > 1.2x langfristiger ATR-Schnitt
+wick_body_ratio: 1.0           # Bestätigungskerze braucht Ablehnungsdocht >= Körpergröße gegen den Ausbruch
 
 allow_shorts: true
 fee_pct: 0.0004            # 0.04% Taker-Gebühr pro Seite (Binance Futures Standard)

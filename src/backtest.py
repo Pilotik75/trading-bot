@@ -6,6 +6,9 @@ Ablauf pro Trade:
 2. Bestätigung: Preis muss `breakout_confirm_bars` Kerzen in Folge jenseits des
    ursprünglichen Ausbruchs-Levels bleiben, bevor die (gefadete) Position tatsächlich
    eröffnet wird (filtert Ausbrüche, die sofort wieder in die Range zurückfallen).
+   Zusätzlich muss die Bestätigungskerze selbst eine Ablehnungs-/Erschöpfungskerze sein
+   (`wick_body_ratio`, siehe strategy.has_rejection_wick) - nur echte Erschöpfungssignale
+   werden gefadet, nicht jeder x-beliebige bestätigte Ausbruch.
 3. Teilausstieg beim ersten Schub: Erreicht der Preis `partial_tp_r_multiple` x
    Stop-Distanz in die Gewinnzone, wird so viel der Position geschlossen, dass der
    realisierte Gewinn genau die potenziellen Stop-Loss-Kosten deckt. Der Stop der
@@ -20,7 +23,7 @@ from typing import List, Optional
 import pandas as pd
 
 from .risk import calculate_position_size
-from .strategy import add_indicators, add_trend_filter, entry_signal, reversal_exit
+from .strategy import add_indicators, add_trend_filter, entry_signal, has_rejection_wick, reversal_exit
 
 
 @dataclass
@@ -64,6 +67,7 @@ class Backtester:
         trend_ema=50,
         vol_lookback=100,
         vol_expansion_multiplier=1.2,
+        wick_body_ratio=1.0,
     ):
         self.initial_capital = capital
         self.capital = capital
@@ -83,6 +87,7 @@ class Backtester:
         self.trend_ema = trend_ema
         self.vol_lookback = vol_lookback
         self.vol_expansion_multiplier = vol_expansion_multiplier
+        self.wick_body_ratio = wick_body_ratio
 
         self.trades: List[Trade] = []
         self.equity_curve = []
@@ -158,7 +163,11 @@ class Backtester:
 
     def _execute_entry(self, row):
         signal = self._pending["trade_side"]
+        breakout_side = self._pending["breakout_side"]
         self._pending = None
+
+        if not has_rejection_wick(row, breakout_side, self.wick_body_ratio):
+            return
 
         stop_distance = row["atr"] * self.atr_multiplier
         sizing = calculate_position_size(

@@ -69,6 +69,9 @@ def parse_args():
                     help="Kerzen für den langfristigen ATR-Schnitt (Volatilitäts-Regime-Filter)")
     p.add_argument("--vol-expansion-multiplier", type=float, default=cfg.get("vol_expansion_multiplier", 1.2),
                     help="Nur handeln, wenn ATR > n x langfristiger ATR-Schnitt (echte Volatilitätsexpansion)")
+    p.add_argument("--wick-body-ratio", type=float, default=cfg.get("wick_body_ratio", 1.0),
+                    help="Mindestverhältnis Docht/Körper der Bestätigungskerze gegen die Ausbruchsrichtung "
+                         "(Ablehnungs-/Erschöpfungssignal); 0 deaktiviert den Filter")
     p.add_argument("--no-shorts", action="store_true", default=not cfg.get("allow_shorts", True))
     p.add_argument("--fee-pct", type=float, default=cfg.get("fee_pct", 0.0004))
     p.add_argument("--output-dir", default=cfg.get("output_dir", "results"))
@@ -117,6 +120,7 @@ def run_for_symbol(symbol, args):
         trend_ema=args.trend_ema,
         vol_lookback=args.vol_lookback,
         vol_expansion_multiplier=args.vol_expansion_multiplier,
+        wick_body_ratio=args.wick_body_ratio,
     )
     equity_df = bt.run(df)
     metrics = compute_metrics(bt.trades, equity_df, args.capital, bars_per_year(args.timeframe))

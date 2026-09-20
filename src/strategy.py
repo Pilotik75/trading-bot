@@ -113,6 +113,30 @@ def entry_signal(row, volume_multiplier=2.0, allow_shorts=True, vol_expansion_mu
     return {"breakout_side": breakout_side, "trade_side": trade_side}
 
 
+def has_rejection_wick(row, breakout_side, wick_body_ratio=1.0):
+    """Prüft, ob die Kerze eine Ablehnungs-/Erschöpfungskerze ist (langer Docht gegen die
+    Ausbruchsrichtung, klassisches Preisaktions-Signal für eine bevorstehende Umkehr).
+
+    Bei einem Aufwärts-Ausbruch (breakout_side='long') wird ein langer oberer Docht verlangt
+    (Käufer wurden über dem Kerzenkörper zurückgedrängt); bei einem Abwärts-Ausbruch analog
+    ein langer unterer Docht. `wick_body_ratio` gibt an, wie groß der Docht mindestens im
+    Verhältnis zum Kerzenkörper sein muss (1.0 = mindestens so groß wie der Körper).
+    """
+    total_range = row["high"] - row["low"]
+    if total_range <= 0:
+        return False
+
+    body = abs(row["close"] - row["open"])
+    if breakout_side == "long":
+        wick = row["high"] - max(row["open"], row["close"])
+    else:
+        wick = min(row["open"], row["close"]) - row["low"]
+
+    if body <= 0:
+        return wick > 0
+    return wick >= wick_body_ratio * body
+
+
 def reversal_exit(row, position_side):
     """Erkennt eine Gegenbewegung: Schlusskurs kreuzt die schnelle EMA entgegen der Position."""
     if pd.isna(row["ema_fast"]):
