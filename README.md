@@ -62,6 +62,14 @@ python -m src.main --symbol BTC/USDT,ETH/USDT \
 Alle Parameter lassen sich auch dauerhaft in `config.yaml` setzen; CLI-Flags überschreiben sie.
 `--help` zeigt alle Optionen.
 
+Zum Vergleich existiert außerdem eine eigenständige **Inside-Bar-Ausbruchs-Strategie** (siehe
+Abschnitt "Hinweise" unten für die Ergebnisse) mit eigenem Entrypoint:
+
+```bash
+python -m src.main_insidebar --symbol BTC/USDT --csv data/btcusdt_1m_sample.csv \
+  --min-inside-bars 3 --target-range-multiple 1.5
+```
+
 Historische Daten werden über [ccxt](https://github.com/ccxt/ccxt) von Binance geladen (öffentliche
 Endpunkte, kein API-Key nötig) und lokal in `data/` als CSV gecacht. Für eigene Daten ohne
 Netzwerkzugriff: `src/data.py::load_csv(path)` erwartet die Spalten
@@ -145,9 +153,25 @@ config.yaml     # Standard-Parameter
      nicht über eine stark veränderte Trefferquote. Immer noch nicht profitabel (Profit-Faktor < 1),
      aber die bislang beste strukturelle Verbesserung.
 
+  6. **Vergleichstest: reine Inside-Bar-Ausbruchs-Strategie** (`src/main_insidebar.py`,
+     eigenständiges Modul, nicht Teil der Fade-Pipeline): Kompression aus `min_inside_bars`
+     aufeinanderfolgenden Kerzen innerhalb einer Mother Bar, danach Ausbruch **in** dessen
+     Richtung gehandelt (Follow, kein Trend-/Volatilitäts-/Ablehnungsfilter), Stop an der
+     gegenüberliegenden Mother-Bar-Seite, Take-Profit als Measured-Move-Ziel
+     (`target_range_multiple` × Range-Höhe). 12 Parameterkombinationen getestet — selbst am
+     selektivsten Punkt (`min_inside_bars=8`, `target_range_multiple=2.0`: 1359 Trades, 35.0 %
+     Trefferquote) nur **Profit-Faktor 0.67, Gesamtrendite -94.4 %** — deutlich schlechter als die
+     Fade-Strategie. Inside-Bar-Kompression ist auf 1m-Krypto-Daten extrem häufig (kein seltenes,
+     bedeutungsvolles Signal wie auf Tages-/Wochenkerzen), und als Follow-Strategie reproduziert
+     sie dasselbe Grundproblem wie die ursprüngliche Volumen-Ausbruch-Strategie (Schritt 1): Auf
+     1m-Krypto-Rauschen hat reines Ausbruchs-Folgen keinen nachweisbaren Edge, unabhängig von der
+     Selektivität des Filters.
+
 **Offene Punkte für echte Profitabilität:** Out-of-Sample-Validierung (bisher wurde alles auf
 demselben 10-Monats-Fenster optimiert — Overfitting-Risiko), sowie ggf. eine Kombination aus
-Erschöpfungsfilter und moderat breiterem Stop.
+Erschöpfungsfilter und moderat breiterem Stop. Die Inside-Bar-Strategie legt außerdem nahe, dass
+Follow-Ansätze auf diesem Zeitrahmen grundsätzlich benachteiligt sind — Fade bleibt der
+vielversprechendere Ansatz.
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der
