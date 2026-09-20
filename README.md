@@ -1,22 +1,34 @@
-# Krypto-Backtesting-Bot: Volumen-Ausbruch-Strategie
+# Krypto-Backtesting-Bot: Volumen-Fade-Strategie
 
-Python-Framework zum **Backtesten** (keine Live-Ausführung) einer Volumen-Ausbruch-Strategie
-auf 1-Minuten-Kerzen für BTC/USDT und ETH/USDT.
+Python-Framework zum **Backtesten** (keine Live-Ausführung) einer Mean-Reversion-Strategie auf
+1-Minuten-Kerzen für BTC/USDT und ETH/USDT. Handelt Volumen-Ausbrüche **gegen** ihre eigene
+Richtung (Fade), aber nur mit dem übergeordneten Trend und bei echter Volatilitätsexpansion.
 
 ## Strategie
 
 - **Einstiegs-Kandidat**: Volumenspitze (aktuelles Volumen > `volume_multiplier` × Durchschnittsvolumen
-  der letzten `lookback` Kerzen) **und** Ausbruch — Schlusskurs über dem höchsten Hoch (Long) bzw.
-  unter dem tiefsten Tief (Short) der letzten `lookback` Kerzen.
+  der letzten `lookback` Kerzen) **und** Ausbruch — Schlusskurs über dem höchsten Hoch bzw. unter
+  dem tiefsten Tief der letzten `lookback` Kerzen — **und** eine echte Volatilitätsexpansion
+  (aktueller ATR > `vol_expansion_multiplier` × ATR-Durchschnitt der letzten `vol_lookback`
+  Kerzen, filtert normales Rauschen ohne Volatilitätsschub).
+- **Trendfilter (Fade statt Follow)**: Der übergeordnete Trend wird auf einem höheren Zeitrahmen
+  (`trend_timeframe`, Standard 1h) über eine EMA (`trend_ema`) bestimmt — nur bereits
+  abgeschlossene Kerzen des höheren Zeitrahmens werden verwendet (kein Lookahead-Bias). Ein
+  Aufwärts-Ausbruch wird nur gehandelt, wenn der übergeordnete Trend **abwärts** zeigt (→ Short,
+  Wette auf Umkehr), ein Abwärts-Ausbruch nur bei übergeordnetem **Aufwärtstrend** (→ Long,
+  "Dip kaufen"). Ausbrüche in Trendrichtung werden übersprungen (kein Trade).
 - **Ausbruchs-Bestätigung**: Der Kandidat wird erst zum echten Trade, wenn der Preis
-  `breakout_confirm_bars` Kerzen in Folge jenseits des Ausbruchs-Levels bleibt. Fällt der Preis
-  vorher zurück, verfällt der Kandidat ohne Trade — filtert Fehlausbrüche, die sofort umkehren.
+  `breakout_confirm_bars` Kerzen in Folge jenseits des ursprünglichen Ausbruchs-Levels bleibt.
+  Fällt der Preis vorher zurück, verfällt der Kandidat ohne Trade.
 - **Teilausstieg beim ersten Schub**: Erreicht der Preis `partial_tp_r_multiple` × Stop-Distanz in
   die Gewinnzone, wird so viel der Position geschlossen, dass der realisierte Gewinn genau die
   potenziellen Stop-Loss-Kosten deckt. Der Stop der Restposition wandert danach auf den
   Einstiegspreis (Breakeven) — der Rest läuft ab diesem Punkt risikofrei weiter.
-- **Ausstieg der Restposition**: Gegenbewegung — Schlusskurs kreuzt die schnelle EMA (`ema_fast`)
-  entgegen der Positionsrichtung — oder der (ggf. auf Breakeven nachgezogene) Stop-Loss.
+- **Ausstieg der Restposition**: Bis der Teilausstieg ausgelöst hat, zählt nur der Stop-Loss (die
+  Mean-Reversion braucht Zeit zum Wirken — ein sofortiger Momentum-Exit direkt nach Entry würde die
+  Position killen, bevor sich der Preis erholen konnte). Erst nachdem der Teilausstieg bestätigt
+  hat, dass sich der Preis erholt, wird zusätzlich die Gegenbewegung scharf geschaltet:
+  Schlusskurs kreuzt die schnelle EMA (`ema_fast`) entgegen der Positionsrichtung.
 - **Risk-Management**: Pro Trade werden `risk_pct` (Standard 2 %, 1-3 % empfohlen) des Kapitals
   riskiert. Positionsgröße und **Hebel werden automatisch** aus der Stop-Distanz (ATR × Multiplikator)
   berechnet: `Positionswert = Risikobetrag / Stop-Distanz-in-%`. Der Hebel wird durch
@@ -84,6 +96,10 @@ config.yaml     # Standard-Parameter
 | `cooldown_bars` | 0 | Sperrfrist (in Kerzen) nach einem Trade, bevor ein neuer eröffnet wird |
 | `breakout_confirm_bars` | 3 | Kerzen, die der Preis jenseits des Levels bleiben muss, bevor eingestiegen wird |
 | `partial_tp_r_multiple` | 2.0 | R-Vielfaches der Stop-Distanz für den Teilausstieg (Breakeven-Trigger) |
+| `trend_timeframe` | "1h" | Höherer Zeitrahmen für den Trendfilter |
+| `trend_ema` | 50 | EMA-Periode auf dem höheren Zeitrahmen |
+| `vol_lookback` | 100 | Kerzen für den langfristigen ATR-Schnitt (Volatilitäts-Regime) |
+| `vol_expansion_multiplier` | 1.2 | Nur handeln, wenn ATR > n × langfristiger ATR-Schnitt |
 | `risk_pct` | 0.02 | Kapitalrisiko pro Trade (1–3 % empfohlen) |
 | `max_leverage` | 2.5 | Obergrenze für automatisch berechneten Hebel |
 | `allow_shorts` | true | Short-Einstiege bei Abwärts-Ausbruch zulassen |
@@ -95,20 +111,22 @@ config.yaml     # Standard-Parameter
   separates Ausführungsmodul mit API-Keys nötig.
 - Ergebnisse eines Backtests sind keine Garantie für zukünftige Performance. Parameter vor
   produktivem Einsatz auf mehreren Zeiträumen und mit Out-of-Sample-Daten validieren.
-- **Getestet auf echten 1m-BTC/USDT-Daten (10 Monate, 432k Kerzen):** Mit den ursprünglichen
-  Standardwerten (`lookback=20`, `volume_multiplier=2.0`, `max_leverage=5.0`, kein Cooldown, kein
-  Bestätigungsfilter) überhandelte die Strategie massiv (~40 Trades/Tag bei sofortigem Einstieg auf
-  den ersten Tick) und lief durch Gebühren allein auf null. Die aktuellen Standardwerte
-  (`breakout_confirm_bars=3`, `partial_tp_r_multiple=2.0`, angepasster Lookback/Schwelle) halten die
-  Trade-Frequenz bei ~40/Tag, verifiziert korrekt funktionierender Bestätigungs- und
-  Teilausstiegs-Logik (im selben Testlauf: 3150/12028 Trades erreichen den 2R-Teilausstieg, 986
-  enden risikofrei am Breakeven-Stop). Das eigentliche Problem bleibt aber bestehen: Die
-  Trefferquote liegt weiterhin nur bei ~23 % (long wie short symmetrisch, Profit-Faktor ~0.44),
-  d.h. der Volumen+Ausbruch-Einstieg selbst hat auf 1-Minuten-Krypto-Daten keinen nachweisbaren
-  positiven Edge — Bestätigung und risikofreier Teilausstieg verbessern das Trade-Management, lösen
-  aber keine negative Erwartungswert der Entry-Logik selbst. Dafür wäre eine strukturelle Änderung
-  nötig, z.B. ein Trendfilter auf höherem Zeitrahmen oder ein Umdrehen der Logik (Fade statt
-  Follow).
+- **Entwicklungsverlauf auf echten 1m-BTC/USDT-Daten (10 Monate, 432k Kerzen):**
+  1. Ursprüngliche Follow-Strategie (Ausbrüche in ihre eigene Richtung handeln), Standardwerte:
+     ~40 Trades/Tag, Trefferquote ~20-23 % (long wie short symmetrisch), Profit-Faktor ~0.44-0.56 —
+     lief auf null. Symmetrisches Verhalten long/short deutete auf keinen echten Edge hin, eher
+     Mean-Reversion des Marktes gegen die eigene Ausbruchs-Logik.
+  2. Umgestellt auf **Fade** (gegen den Ausbruch, mit dem 1h-Trend) + Volatilitäts-Regime-Filter:
+     Trefferquote stieg zunächst kaum (~22.6 %), weil der EMA-Reversal-Exit eine Fade-Position
+     fast sofort wieder killte — man kauft bewusst gegen die gerade laufende Bewegung, das
+     Momentum zeigt direkt nach Entry fast immer noch dagegen. Bug behoben: Der Reversal-Exit
+     greift jetzt erst, nachdem der 2R-Teilausstieg bestätigt hat, dass sich der Preis erholt.
+  3. Mit dem Fix: **1868 Trades, Trefferquote 33.7 %, Profit-Faktor 0.67** (deutliche Verbesserung
+     gegenüber der Follow-Strategie, aber noch nicht profitabel). Bottleneck laut Trade-Log: 64 %
+     der Trades werden vom Stop-Loss beendet, bevor die Mean-Reversion das 2R-Teilausstiegsziel
+     erreicht — nur 36 % kommen so weit. Mögliche nächste Schritte: weiterer Stop (mehr Raum für
+     die Erholung), niedrigeres `partial_tp_r_multiple`, oder strengere Ausbruchs-/Volatilitäts-
+     Schwellen für höherwertige Fade-Setups.
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der

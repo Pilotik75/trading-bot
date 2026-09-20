@@ -19,6 +19,11 @@ cooldown_bars: 0            # keine Sperrfrist (Zielfrequenz ~40 Trades/Tag)
 breakout_confirm_bars: 3   # Preis muss 3 Kerzen jenseits des Ausbruchs-Levels bleiben, bevor eingestiegen wird
 partial_tp_r_multiple: 2.0  # bei 2R Gewinn: Teil schließen (deckt Stop-Loss-Kosten), Rest-Stop auf Breakeven
 
+trend_timeframe: "1h"       # höherer Zeitrahmen für den Trendfilter
+trend_ema: 50                 # EMA-Periode auf dem höheren Zeitrahmen
+vol_lookback: 100             # Kerzen für den langfristigen ATR-Schnitt (Volatilitäts-Regime)
+vol_expansion_multiplier: 1.2  # nur handeln, wenn ATR > 1.2x langfristiger ATR-Schnitt
+
 allow_shorts: true
 fee_pct: 0.0004            # 0.04% Taker-Gebühr pro Seite (Binance Futures Standard)
 output_dir: "results"

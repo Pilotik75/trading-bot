@@ -1,10 +1,11 @@
-"""Event-getriebene Backtest-Engine für die Volumen-Ausbruch-Strategie.
+"""Event-getriebene Backtest-Engine für die Fade-Strategie.
 
 Ablauf pro Trade:
-1. Kandidat: Volumenspitze + Ausbruch über/unter die Range (siehe strategy.entry_signal).
+1. Kandidat: Volumenspitze + Ausbruch über/unter die Range + Volatilitätsexpansion,
+   gegen den übergeordneten Trend gefadet (siehe strategy.entry_signal).
 2. Bestätigung: Preis muss `breakout_confirm_bars` Kerzen in Folge jenseits des
-   Ausbruchs-Levels bleiben, bevor die Position tatsächlich eröffnet wird
-   (filtert False-Breakouts, die sofort zurückfallen).
+   ursprünglichen Ausbruchs-Levels bleiben, bevor die (gefadete) Position tatsächlich
+   eröffnet wird (filtert Ausbrüche, die sofort wieder in die Range zurückfallen).
 3. Teilausstieg beim ersten Schub: Erreicht der Preis `partial_tp_r_multiple` x
    Stop-Distanz in die Gewinnzone, wird so viel der Position geschlossen, dass der
    realisierte Gewinn genau die potenziellen Stop-Loss-Kosten deckt. Der Stop der
@@ -19,7 +20,7 @@ from typing import List, Optional
 import pandas as pd
 
 from .risk import calculate_position_size
-from .strategy import add_indicators, entry_signal, reversal_exit
+from .strategy import add_indicators, add_trend_filter, entry_signal, reversal_exit
 
 
 @dataclass
@@ -59,6 +60,10 @@ class Backtester:
         cooldown_bars=0,
         breakout_confirm_bars=3,
         partial_tp_r_multiple=2.0,
+        trend_timeframe="1h",
+        trend_ema=50,
+        vol_lookback=100,
+        vol_expansion_multiplier=1.2,
     ):
         self.initial_capital = capital
         self.capital = capital
@@ -74,6 +79,10 @@ class Backtester:
         self.cooldown_bars = cooldown_bars
         self.breakout_confirm_bars = max(1, breakout_confirm_bars)
         self.partial_tp_r_multiple = partial_tp_r_multiple
+        self.trend_timeframe = trend_timeframe
+        self.trend_ema = trend_ema
+        self.vol_lookback = vol_lookback
+        self.vol_expansion_multiplier = vol_expansion_multiplier
 
         self.trades: List[Trade] = []
         self.equity_curve = []
@@ -82,7 +91,8 @@ class Backtester:
         self._pending = None  # Kandidat, der noch auf Bestätigung wartet
 
     def run(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = add_indicators(df, self.lookback, self.atr_period, self.ema_fast)
+        df = add_indicators(df, self.lookback, self.atr_period, self.ema_fast, self.vol_lookback)
+        df = add_trend_filter(df, self.trend_timeframe, self.trend_ema)
 
         for _, row in df.iterrows():
             if self.position is not None:
@@ -119,17 +129,25 @@ class Backtester:
             return
 
         if self._pending is None:
-            signal = entry_signal(row, self.volume_multiplier, self.allow_shorts)
+            signal = entry_signal(row, self.volume_multiplier, self.allow_shorts, self.vol_expansion_multiplier)
             if signal is None:
                 return
-            level = row["range_high"] if signal == "long" else row["range_low"]
-            self._pending = {"side": signal, "level": level, "confirm_count": 1}
+            level = row["range_high"] if signal["breakout_side"] == "long" else row["range_low"]
+            self._pending = {
+                "breakout_side": signal["breakout_side"],
+                "trade_side": signal["trade_side"],
+                "level": level,
+                "confirm_count": 1,
+            }
             if self.breakout_confirm_bars == 1:
                 self._execute_entry(row)
             return
 
         pending = self._pending
-        held = (row["close"] > pending["level"]) if pending["side"] == "long" else (row["close"] < pending["level"])
+        held = (
+            (row["close"] > pending["level"]) if pending["breakout_side"] == "long"
+            else (row["close"] < pending["level"])
+        )
         if not held:
             self._pending = None
             return
@@ -139,7 +157,7 @@ class Backtester:
             self._execute_entry(row)
 
     def _execute_entry(self, row):
-        signal = self._pending["side"]
+        signal = self._pending["trade_side"]
         self._pending = None
 
         stop_distance = row["atr"] * self.atr_multiplier
@@ -206,7 +224,12 @@ class Backtester:
             self._close_position(row["timestamp"], pos.stop_price, reason)
             return
 
-        if reversal_exit(row, pos.side):
+        # Der EMA-Reversal-Exit prüft kurzfristiges Momentum gegen die Position. Bei einer
+        # Fade-Position ist das direkt nach Entry meist noch der Fall (man kauft ja bewusst
+        # gegen die gerade laufende Bewegung) - das würde die Position sofort wieder killen,
+        # bevor die Mean-Reversion überhaupt wirken konnte. Daher erst aktiv, nachdem der
+        # Teilausstieg bestätigt hat, dass sich der Preis tatsächlich erholt hat.
+        if pos.partial_time is not None and reversal_exit(row, pos.side):
             self._close_position(row["timestamp"], row["close"], "reversal")
 
     def _close_position(self, timestamp, price, reason):

@@ -61,6 +61,14 @@ def parse_args():
     p.add_argument("--partial-tp-r-multiple", type=float, default=cfg.get("partial_tp_r_multiple", 2.0),
                     help="R-Vielfaches der Stop-Distanz, bei dem ein Teil der Position geschlossen "
                          "wird (Gewinn deckt die Stop-Loss-Kosten); Rest-Stop wandert danach auf Breakeven")
+    p.add_argument("--trend-timeframe", default=cfg.get("trend_timeframe", "1h"),
+                    help="Höherer Zeitrahmen für den Trendfilter, z.B. 15m, 1h, 4h")
+    p.add_argument("--trend-ema", type=int, default=cfg.get("trend_ema", 50),
+                    help="EMA-Periode auf dem höheren Zeitrahmen zur Trendbestimmung")
+    p.add_argument("--vol-lookback", type=int, default=cfg.get("vol_lookback", 100),
+                    help="Kerzen für den langfristigen ATR-Schnitt (Volatilitäts-Regime-Filter)")
+    p.add_argument("--vol-expansion-multiplier", type=float, default=cfg.get("vol_expansion_multiplier", 1.2),
+                    help="Nur handeln, wenn ATR > n x langfristiger ATR-Schnitt (echte Volatilitätsexpansion)")
     p.add_argument("--no-shorts", action="store_true", default=not cfg.get("allow_shorts", True))
     p.add_argument("--fee-pct", type=float, default=cfg.get("fee_pct", 0.0004))
     p.add_argument("--output-dir", default=cfg.get("output_dir", "results"))
@@ -105,6 +113,10 @@ def run_for_symbol(symbol, args):
         cooldown_bars=args.cooldown_bars,
         breakout_confirm_bars=args.breakout_confirm_bars,
         partial_tp_r_multiple=args.partial_tp_r_multiple,
+        trend_timeframe=args.trend_timeframe,
+        trend_ema=args.trend_ema,
+        vol_lookback=args.vol_lookback,
+        vol_expansion_multiplier=args.vol_expansion_multiplier,
     )
     equity_df = bt.run(df)
     metrics = compute_metrics(bt.trades, equity_df, args.capital, bars_per_year(args.timeframe))
