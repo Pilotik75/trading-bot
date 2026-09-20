@@ -78,6 +78,15 @@ python -m src.main_insidebar --symbol BTC/USDT --csv data/btcusdt_1m_sample.csv 
   --min-inside-bars 3 --target-range-multiple 1.5
 ```
 
+Sowie eine **Multi-Timeframe-Variante der Fade-Strategie**: Ausbruchserkennung auf einem höheren
+Signal-Zeitrahmen, Einstieg und Positionsüberwachung (Stop-Loss, Teilausstieg, Gegenbewegung)
+aber auf 1-Minuten-Basis für präziseres Timing (siehe "Hinweise" unten für die Ergebnisse):
+
+```bash
+python -m src.main_mtf --symbol BTC/USDT --csv data/btcusdt_1m_sample.csv \
+  --signal-timeframe 5min --trend-timeframe 1h
+```
+
 Historische Daten werden über [ccxt](https://github.com/ccxt/ccxt) von Binance geladen (öffentliche
 Endpunkte, kein API-Key nötig) und lokal in `data/` als CSV gecacht. Für eigene Daten ohne
 Netzwerkzugriff: `src/data.py::load_csv(path)` erwartet die Spalten
@@ -186,6 +195,20 @@ config.yaml     # Standard-Parameter
      Trade-Zahl reduziert die kumulative Gebührenlast drastisch (64 vs. 1868 Trades im
      vergleichbaren 1m-Test). Datenbasis mit 179 Tagen / 64 Trades aber weiterhin klein — echte
      Bestätigung bräuchte einen längeren Zeitraum.
+  8. **Multi-Timeframe: Ausbruchserkennung auf 5m/1h, Einstieg + Überwachung auf 1m**
+     (`src/backtest_mtf.py`/`src/main_mtf.py`, eigenständige Engine): Kandidat, Bestätigung,
+     Ablehnungskerze und Trend-/Volatilitätsfilter laufen auf dem Signal-Zeitrahmen (per
+     `merge_asof` lookahead-frei auf die 1m-Zeitachse projiziert), aber Einstieg erfolgt exakt auf
+     der 1m-Kerze, die mit dem Abschluss der auslösenden Signal-Kerze zusammenfällt, und Stop-Loss/
+     Teilausstieg/Gegenbewegung werden ab dann auf **jeder** 1m-Kerze geprüft (Gegenbewegungs-EMA
+     läuft dafür direkt auf 1m-Daten). Getestet auf den echten 1m-Daten (10 Monate):
+     - Signal=5m, Trend=1h: **117 Trades (0.39/Tag), Trefferquote 35.9 %, Profit-Faktor 1.00,
+       Gesamtrendite -10.7 %** — nahe am nativen 5m-Test (PF 1.16), etwas schwächer, plausibel
+       durch die reaktivere 1m-Gegenbewegungs-EMA (nervösere Exits als die 5m-EMA im nativen Test).
+       Bottleneck weiterhin dasselbe Muster: 64 % der Trades enden im vollen Stop-Loss.
+     - Signal=1h, Trend=4h: nur **6 Trades in 6 Monaten** — die Kombination aus stündlichem
+       Ausbruch, 3 Bestätigungsstunden, Ablehnungskerze und 4h-Trendfilter ist zu selten für eine
+       belastbare Aussage.
 
 **Offene Punkte für echte Profitabilität:** Längerer 5m-Datensatz zur saubereren Out-of-Sample-
 Validierung (bisher wurde für 1m alles auf demselben 10-Monats-Fenster optimiert —

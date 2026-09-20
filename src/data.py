@@ -81,3 +81,21 @@ def load_csv(path):
     if missing:
         raise ValueError(f"CSV fehlen Spalten: {missing}")
     return df.sort_values("timestamp").reset_index(drop=True)
+
+
+def resample_ohlcv(df, timeframe):
+    """Aggregiert feingranulare OHLCV-Daten (z.B. 1m) auf einen gröberen Zeitrahmen (z.B. 5m, 1h).
+
+    label='right' sorgt dafür, dass jede aggregierte Kerze mit ihrem Schlusszeitpunkt indiziert
+    wird (nicht dem Öffnungszeitpunkt) - wichtig, damit ein per merge_asof(direction='backward')
+    darauf gemapptes feingranulares Signal nur bereits vollständig abgeschlossene gröbere Kerzen
+    sieht (kein Lookahead-Bias).
+    """
+    resampled = (
+        df.set_index("timestamp")
+        .resample(timeframe, label="right", closed="left")
+        .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+        .dropna()
+        .reset_index()
+    )
+    return resampled
