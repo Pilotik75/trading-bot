@@ -68,13 +68,14 @@ config.yaml     # Standard-Parameter
 
 | Parameter | Standard | Bedeutung |
 |---|---|---|
-| `lookback` | 20 | Kerzen für Range-Hoch/Tief und Volumen-Durchschnitt |
-| `volume_multiplier` | 2.0 | Volumen-Spitze = Volumen > n × Durchschnitt |
+| `lookback` | 90 | Kerzen für Range-Hoch/Tief und Volumen-Durchschnitt |
+| `volume_multiplier` | 3.5 | Volumen-Spitze = Volumen > n × Durchschnitt |
 | `atr_period` | 14 | Perioden für ATR-Berechnung |
 | `atr_multiplier` | 1.5 | Stop-Distanz = ATR × Multiplikator |
 | `ema_fast` | 9 | EMA-Periode zur Gegenbewegungs-Erkennung |
+| `cooldown_bars` | 30 | Sperrfrist (in Kerzen) nach einem Trade, bevor ein neuer eröffnet wird |
 | `risk_pct` | 0.02 | Kapitalrisiko pro Trade (1–3 % empfohlen) |
-| `max_leverage` | 5.0 | Obergrenze für automatisch berechneten Hebel |
+| `max_leverage` | 2.5 | Obergrenze für automatisch berechneten Hebel |
 | `allow_shorts` | true | Short-Einstiege bei Abwärts-Ausbruch zulassen |
 | `fee_pct` | 0.0004 | Gebühr pro Trade-Seite (Binance Futures Taker) |
 
@@ -84,6 +85,17 @@ config.yaml     # Standard-Parameter
   separates Ausführungsmodul mit API-Keys nötig.
 - Ergebnisse eines Backtests sind keine Garantie für zukünftige Performance. Parameter vor
   produktivem Einsatz auf mehreren Zeiträumen und mit Out-of-Sample-Daten validieren.
+- **Getestet auf echten 1m-BTC/USDT-Daten (10 Monate):** Mit den ursprünglichen Standardwerten
+  (`lookback=20`, `volume_multiplier=2.0`, `max_leverage=5.0`, kein Cooldown) überhandelte die
+  Strategie massiv (~40 Trades/Tag) und lief durch Gebühren allein auf null. Die aktuellen
+  Standardwerte (größerer Lookback, schärfere Volumen-Schwelle, Cooldown, niedrigerer Max-Hebel)
+  reduzieren die Trade-Frequenz deutlich, beheben aber nicht das eigentliche Problem: Die
+  Trefferquote liegt auch danach nur bei ~20–23 % (long wie short symmetrisch), d.h. der
+  Volumen+Ausbruch-Einstieg selbst hat auf 1-Minuten-Krypto-Daten keinen nachweisbaren positiven
+  Edge — er kauft/verkauft eher an lokalen Extremen, die sich sofort umkehren, als echte
+  Trendfortsetzungen zu erwischen. Vor produktivem Einsatz braucht die Entry-Logik eine
+  strukturelle Ergänzung, z.B. eine Bestätigung des Ausbruchs über mehrere Kerzen, einen
+  Trendfilter auf höherem Zeitrahmen, oder ein Umdrehen der Logik (Fade statt Follow).
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der

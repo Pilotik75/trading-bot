@@ -38,6 +38,7 @@ class Backtester:
         ema_fast=9,
         allow_shorts=True,
         fee_pct=0.0004,
+        cooldown_bars=0,
     ):
         self.initial_capital = capital
         self.capital = capital
@@ -50,10 +51,12 @@ class Backtester:
         self.ema_fast = ema_fast
         self.allow_shorts = allow_shorts
         self.fee_pct = fee_pct
+        self.cooldown_bars = cooldown_bars
 
         self.trades: List[Trade] = []
         self.equity_curve = []
         self.position: Optional[Trade] = None
+        self._bars_since_exit = cooldown_bars
 
     def run(self, df: pd.DataFrame) -> pd.DataFrame:
         df = add_indicators(df, self.lookback, self.atr_period, self.ema_fast)
@@ -62,7 +65,10 @@ class Backtester:
             if self.position is not None:
                 self._check_exit(row)
             if self.position is None:
-                self._check_entry(row)
+                if self._bars_since_exit < self.cooldown_bars:
+                    self._bars_since_exit += 1
+                else:
+                    self._check_entry(row)
 
             equity = self.capital
             if self.position is not None:
@@ -132,3 +138,4 @@ class Backtester:
 
         self.trades.append(pos)
         self.position = None
+        self._bars_since_exit = 0

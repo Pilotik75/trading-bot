@@ -47,12 +47,14 @@ def parse_args():
     p.add_argument("--until", default=cfg.get("until"))
     p.add_argument("--capital", type=float, default=cfg.get("capital", 10000))
     p.add_argument("--risk-pct", type=float, default=cfg.get("risk_pct", 0.02))
-    p.add_argument("--max-leverage", type=float, default=cfg.get("max_leverage", 5.0))
-    p.add_argument("--lookback", type=int, default=cfg.get("lookback", 20))
-    p.add_argument("--volume-multiplier", type=float, default=cfg.get("volume_multiplier", 2.0))
+    p.add_argument("--max-leverage", type=float, default=cfg.get("max_leverage", 2.5))
+    p.add_argument("--lookback", type=int, default=cfg.get("lookback", 90))
+    p.add_argument("--volume-multiplier", type=float, default=cfg.get("volume_multiplier", 3.5))
     p.add_argument("--atr-period", type=int, default=cfg.get("atr_period", 14))
     p.add_argument("--atr-multiplier", type=float, default=cfg.get("atr_multiplier", 1.5))
     p.add_argument("--ema-fast", type=int, default=cfg.get("ema_fast", 9))
+    p.add_argument("--cooldown-bars", type=int, default=cfg.get("cooldown_bars", 30),
+                    help="Kerzen Sperrfrist nach einem Trade, bevor ein neuer eröffnet werden darf")
     p.add_argument("--no-shorts", action="store_true", default=not cfg.get("allow_shorts", True))
     p.add_argument("--fee-pct", type=float, default=cfg.get("fee_pct", 0.0004))
     p.add_argument("--output-dir", default=cfg.get("output_dir", "results"))
@@ -94,6 +96,7 @@ def run_for_symbol(symbol, args):
         ema_fast=args.ema_fast,
         allow_shorts=not args.no_shorts,
         fee_pct=args.fee_pct,
+        cooldown_bars=args.cooldown_bars,
     )
     equity_df = bt.run(df)
     metrics = compute_metrics(bt.trades, equity_df, args.capital, bars_per_year(args.timeframe))
