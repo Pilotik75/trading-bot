@@ -2,9 +2,9 @@
 
 Python-Framework zum **Backtesten** (keine Live-Ausführung) einer Mean-Reversion-Strategie für
 BTC/USDT und ETH/USDT. Handelt Volumen-Ausbrüche **gegen** ihre eigene Richtung (Fade), aber nur
-mit dem übergeordneten Trend und bei echter Volatilitätsexpansion. Ursprünglich für 1-Minuten-
-Kerzen entwickelt; Backtests zeigen jedoch, dass **5-Minuten-Kerzen deutlich besser funktionieren**
-(siehe "Hinweise" unten) — der `timeframe`-Parameter ist frei wählbar.
+mit dem übergeordneten Trend und bei echter Volatilitätsexpansion. Standard-Zeitrahmen ist
+**5-Minuten** (deutlich robuster als 1-Minuten, siehe "Hinweise" unten) — der `timeframe`-Parameter
+bleibt frei wählbar.
 
 ## Strategie
 
@@ -56,16 +56,11 @@ pip install -r requirements.txt
 ## Nutzung
 
 ```bash
-python -m src.main --symbol BTC/USDT,ETH/USDT \
-  --since 2024-06-01T00:00:00Z --until 2024-06-08T00:00:00Z \
-  --capital 10000 --risk-pct 0.02 --max-leverage 5
-```
-
-Mit 5-Minuten-Kerzen (siehe "Hinweise" unten - deutlich bessere Ergebnisse als 1m):
-
-```bash
 python -m src.main --symbol BTC/USDT --timeframe 5m --csv data/btcusdt_5m_sample.csv
 ```
+
+`--timeframe 1m` funktioniert weiterhin, ist aber Backtests zufolge deutlich schwächer (siehe
+"Hinweise" unten).
 
 Alle Parameter lassen sich auch dauerhaft in `config.yaml` setzen; CLI-Flags überschreiben sie.
 `--help` zeigt alle Optionen.
@@ -121,11 +116,11 @@ config.yaml     # Standard-Parameter
 | `lookback` | 15 | Kerzen für Range-Hoch/Tief und Volumen-Durchschnitt |
 | `volume_multiplier` | 1.5 | Volumen-Spitze = Volumen > n × Durchschnitt |
 | `atr_period` | 14 | Perioden für ATR-Berechnung |
-| `atr_multiplier` | 1.5 | Stop-Distanz = ATR × Multiplikator |
+| `atr_multiplier` | 2.0 | Stop-Distanz = ATR × Multiplikator |
 | `ema_fast` | 9 | EMA-Periode zur Gegenbewegungs-Erkennung |
 | `cooldown_bars` | 0 | Sperrfrist (in Kerzen) nach einem Trade, bevor ein neuer eröffnet wird |
 | `breakout_confirm_bars` | 3 | Kerzen, die der Preis jenseits des Levels bleiben muss, bevor eingestiegen wird |
-| `partial_tp_r_multiple` | 2.0 | R-Vielfaches der Stop-Distanz für den Teilausstieg (Breakeven-Trigger) |
+| `partial_tp_r_multiple` | 1.5 | R-Vielfaches der Stop-Distanz für den Teilausstieg (Breakeven-Trigger) |
 | `trend_timeframe` | "1h" | Höherer Zeitrahmen für den Trendfilter |
 | `trend_ema` | 50 | EMA-Periode auf dem höheren Zeitrahmen |
 | `vol_lookback` | 100 | Kerzen für den langfristigen ATR-Schnitt (Volatilitäts-Regime) |
@@ -209,13 +204,26 @@ config.yaml     # Standard-Parameter
      - Signal=1h, Trend=4h: nur **6 Trades in 6 Monaten** — die Kombination aus stündlichem
        Ausbruch, 3 Bestätigungsstunden, Ablehnungskerze und 4h-Trendfilter ist zu selten für eine
        belastbare Aussage.
+  9. **Parameter-Sweep auf 5m** (60 Kombinationen `atr_multiplier` × `partial_tp_r_multiple` ×
+     `wick_body_ratio`, aktuelle Standardwerte als Ausgangspunkt): Der beste Aggregat-Treffer
+     (`atr_mult=4.0, partial_r=4.0`: PF 1.30, +20.4 %) entpuppte sich beim Split-Test (erste vs.
+     zweite Hälfte des Zeitraums) als **Overfitting-Falle** — erste Hälfte PF 2.02, zweite Hälfte
+     PF 0.64 (Verlust). Der Gewinn kam fast vollständig aus einer einzelnen guten Phase, nicht aus
+     einem robusten Edge; dasselbe Muster bei `atr_mult=5.0, partial_r=3.0` (PF 1.92 vs. 0.47).
+     Stattdessen gezielt nach einer in **beiden** Hälften profitablen Kombination gesucht:
+     **`atr_multiplier=2.0, partial_tp_r_multiple=1.5`** — H1 PF 1.34, H2 PF 1.17, aggregiert
+     **64 Trades, Trefferquote 50.0 %, Profit-Faktor 1.27, Gesamtrendite +3.7 %, Max-Drawdown
+     -10.1 %**. Konsistent besser als der bisherige Default (PF 1.16/1.02/1.40) und deutlich
+     robuster als der reine Aggregat-Bestwert. Als neue Standardwerte übernommen
+     (`config.yaml`/`src/backtest.py`).
 
 **Offene Punkte für echte Profitabilität:** Längerer 5m-Datensatz zur saubereren Out-of-Sample-
-Validierung (bisher wurde für 1m alles auf demselben 10-Monats-Fenster optimiert —
-Overfitting-Risiko, für 5m liegt bislang nur ein 6-Monats-Fenster vor), sowie ggf. eine
-Kombination aus Erschöpfungsfilter und moderat breiterem Stop auf 5m. Die Inside-Bar-Strategie
-legt außerdem nahe, dass Follow-Ansätze auf kurzen Zeitrahmen grundsätzlich benachteiligt sind —
-Fade auf 5m ist bislang der vielversprechendste Ansatz.
+Validierung (bisher wurde alles auf demselben 6-Monats-Fenster optimiert, mit Split-Test als
+Notbehelf — ein drittes, komplett ungesehenes Fenster wäre die eigentliche Bestätigung). Die
+Inside-Bar-Strategie legt außerdem nahe, dass Follow-Ansätze auf kurzen Zeitrahmen grundsätzlich
+benachteiligt sind — Fade auf 5m bleibt der vielversprechendste Ansatz. **Wichtige Lektion aus dem
+Sweep:** Bei kleinen Trade-Zahlen (hier 40-70) immer gegen mehrere Zeitfenster prüfen, nicht nur
+den Aggregat-Profit-Faktor optimieren — der beste Einzelwert ist oft der am stärksten überfittete.
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der

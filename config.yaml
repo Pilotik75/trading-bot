@@ -2,7 +2,7 @@
 # Alle Werte können per CLI-Flag überschrieben werden (siehe: python -m src.main --help)
 
 symbol: "BTC/USDT,ETH/USDT"
-timeframe: "1m"
+timeframe: "5m"            # 5-Minuten-Kerzen liefern deutlich robustere Ergebnisse als 1-Minuten (siehe README)
 since: "2024-06-01T00:00:00Z"
 until: "2024-06-08T00:00:00Z"
 
@@ -13,11 +13,11 @@ max_leverage: 2.5        # Deckelt den automatisch berechneten Hebel
 lookback: 15               # Kerzen für Range- und Volumen-Durchschnitt
 volume_multiplier: 1.5    # Volumen-Spitze = Volumen > 1.5x Durchschnitt
 atr_period: 14
-atr_multiplier: 1.5       # Stop-Distanz = ATR * Multiplikator
+atr_multiplier: 2.0       # Stop-Distanz = ATR * Multiplikator
 ema_fast: 9                # Für Gegenbewegungs-/Reversal-Erkennung
-cooldown_bars: 0            # keine Sperrfrist (Zielfrequenz ~40 Trades/Tag)
+cooldown_bars: 0            # keine Sperrfrist
 breakout_confirm_bars: 3   # Preis muss 3 Kerzen jenseits des Ausbruchs-Levels bleiben, bevor eingestiegen wird
-partial_tp_r_multiple: 2.0  # bei 2R Gewinn: Teil schließen (deckt Stop-Loss-Kosten), Rest-Stop auf Breakeven
+partial_tp_r_multiple: 1.5  # bei 1.5R Gewinn: Teil schließen (deckt Stop-Loss-Kosten), Rest-Stop auf Breakeven
 
 trend_timeframe: "1h"       # höherer Zeitrahmen für den Trendfilter
 trend_ema: 50                 # EMA-Periode auf dem höheren Zeitrahmen

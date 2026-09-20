@@ -39,10 +39,10 @@ def bars_per_year(timeframe):
 
 def parse_args():
     cfg = load_config()
-    p = argparse.ArgumentParser(description="Volumen-Ausbruch Backtest (Krypto, 1-Minuten-Kerzen)")
+    p = argparse.ArgumentParser(description="Volumen-Fade Backtest (Krypto)")
     p.add_argument("--symbol", default=cfg.get("symbol", "BTC/USDT"),
                     help="Ein oder mehrere Symbole, kommagetrennt, z.B. BTC/USDT,ETH/USDT")
-    p.add_argument("--timeframe", default=cfg.get("timeframe", "1m"))
+    p.add_argument("--timeframe", default=cfg.get("timeframe", "5m"))
     p.add_argument("--since", default=cfg.get("since", "2024-06-01T00:00:00Z"))
     p.add_argument("--until", default=cfg.get("until"))
     p.add_argument("--capital", type=float, default=cfg.get("capital", 10000))
@@ -51,14 +51,14 @@ def parse_args():
     p.add_argument("--lookback", type=int, default=cfg.get("lookback", 15))
     p.add_argument("--volume-multiplier", type=float, default=cfg.get("volume_multiplier", 1.5))
     p.add_argument("--atr-period", type=int, default=cfg.get("atr_period", 14))
-    p.add_argument("--atr-multiplier", type=float, default=cfg.get("atr_multiplier", 1.5))
+    p.add_argument("--atr-multiplier", type=float, default=cfg.get("atr_multiplier", 2.0))
     p.add_argument("--ema-fast", type=int, default=cfg.get("ema_fast", 9))
     p.add_argument("--cooldown-bars", type=int, default=cfg.get("cooldown_bars", 0),
                     help="Kerzen Sperrfrist nach einem Trade, bevor ein neuer eröffnet werden darf")
     p.add_argument("--breakout-confirm-bars", type=int, default=cfg.get("breakout_confirm_bars", 3),
                     help="Kerzen, die der Preis jenseits des Ausbruchs-Levels bleiben muss, bevor "
                          "tatsächlich eingestiegen wird (filtert sofort zurückfallende Fehlausbrüche)")
-    p.add_argument("--partial-tp-r-multiple", type=float, default=cfg.get("partial_tp_r_multiple", 2.0),
+    p.add_argument("--partial-tp-r-multiple", type=float, default=cfg.get("partial_tp_r_multiple", 1.5),
                     help="R-Vielfaches der Stop-Distanz, bei dem ein Teil der Position geschlossen "
                          "wird (Gewinn deckt die Stop-Loss-Kosten); Rest-Stop wandert danach auf Breakeven")
     p.add_argument("--trend-timeframe", default=cfg.get("trend_timeframe", "1h"),
