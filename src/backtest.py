@@ -9,12 +9,17 @@ Ablauf pro Trade:
    Zusätzlich muss die Bestätigungskerze selbst eine Ablehnungs-/Erschöpfungskerze sein
    (`wick_body_ratio`, siehe strategy.has_rejection_wick) - nur echte Erschöpfungssignale
    werden gefadet, nicht jeder x-beliebige bestätigte Ausbruch.
-3. Teilausstieg beim ersten Schub: Erreicht der Preis `partial_tp_r_multiple` x
+3. Stop-Straffung: Erreicht der Preis schon vorher `stop_tighten_r_multiple` x
+   Stop-Distanz in die Gewinnzone (typischerweise vor dem Teilausstieg), wird der Stop
+   von der vollen Anfangs-Distanz auf `stop_tighten_to_r_multiple` x Stop-Distanz
+   nachgezogen - reduziert den maximalen Verlust für Trades, die sich zunächst erholen,
+   dann aber doch scheitern, bevor sie den Teilausstieg erreichen.
+4. Teilausstieg beim ersten Schub: Erreicht der Preis `partial_tp_r_multiple` x
    Stop-Distanz in die Gewinnzone, wird so viel der Position geschlossen, dass der
    realisierte Gewinn genau die potenziellen Stop-Loss-Kosten deckt. Der Stop der
    Restposition wird danach auf den Einstiegspreis (Breakeven) gezogen, d.h. der Rest
    läuft ab diesem Punkt risikofrei.
-4. Exit der Restposition: Stop-Loss oder Gegenbewegung (Reversal), wie zuvor.
+5. Exit der Restposition: Stop-Loss oder Gegenbewegung (Reversal), wie zuvor.
 """
 
 from dataclasses import dataclass
@@ -35,6 +40,8 @@ class Trade:
     leverage: float
     stop_price: float
     risk_amount: float
+    stop_distance: float = 0.0           # ursprüngliche Stop-Distanz bei Entry (fix, für R-Berechnungen)
+    stop_tightened: bool = False
     remaining_size: float = 0.0
     partial_time: Optional[pd.Timestamp] = None
     partial_price: Optional[float] = None
@@ -63,6 +70,8 @@ class Backtester:
         cooldown_bars=0,
         breakout_confirm_bars=3,
         partial_tp_r_multiple=1.5,
+        stop_tighten_r_multiple=None,
+        stop_tighten_to_r_multiple=-0.5,
         trend_timeframe="1h",
         trend_ema=50,
         vol_lookback=100,
@@ -83,6 +92,8 @@ class Backtester:
         self.cooldown_bars = cooldown_bars
         self.breakout_confirm_bars = max(1, breakout_confirm_bars)
         self.partial_tp_r_multiple = partial_tp_r_multiple
+        self.stop_tighten_r_multiple = stop_tighten_r_multiple
+        self.stop_tighten_to_r_multiple = stop_tighten_to_r_multiple
         self.trend_timeframe = trend_timeframe
         self.trend_ema = trend_ema
         self.vol_lookback = vol_lookback
@@ -100,6 +111,8 @@ class Backtester:
         df = add_trend_filter(df, self.trend_timeframe, self.trend_ema)
 
         for _, row in df.iterrows():
+            if self.position is not None:
+                self._check_stop_tighten(row)
             if self.position is not None:
                 self._check_partial_tp(row)
             if self.position is not None:
@@ -186,8 +199,29 @@ class Backtester:
             leverage=sizing.leverage,
             stop_price=sizing.stop_price,
             risk_amount=sizing.risk_amount,
+            stop_distance=stop_distance,
             remaining_size=sizing.size,
         )
+
+    def _check_stop_tighten(self, row):
+        pos = self.position
+        if self.stop_tighten_r_multiple is None or pos.stop_tightened or pos.partial_time is not None:
+            return
+
+        direction = 1 if pos.side == "long" else -1
+        trigger_price = pos.entry_price + direction * self.stop_tighten_r_multiple * pos.stop_distance
+
+        favorable_extreme = row["high"] if pos.side == "long" else row["low"]
+        reached = favorable_extreme >= trigger_price if pos.side == "long" else favorable_extreme <= trigger_price
+        if not reached:
+            return
+
+        new_stop = pos.entry_price + direction * self.stop_tighten_to_r_multiple * pos.stop_distance
+        # Nur nachziehen, wenn das den Stop tatsächlich näher an den Preis bringt.
+        improves = new_stop > pos.stop_price if pos.side == "long" else new_stop < pos.stop_price
+        if improves:
+            pos.stop_price = new_stop
+        pos.stop_tightened = True
 
     def _check_partial_tp(self, row):
         pos = self.position
@@ -195,7 +229,7 @@ class Backtester:
             return
 
         direction = 1 if pos.side == "long" else -1
-        stop_distance = abs(pos.entry_price - pos.stop_price)
+        stop_distance = pos.stop_distance
         target_price = pos.entry_price + direction * self.partial_tp_r_multiple * stop_distance
 
         favorable_extreme = row["high"] if pos.side == "long" else row["low"]
@@ -229,7 +263,12 @@ class Backtester:
         pos = self.position
         stop_hit = (row["low"] <= pos.stop_price) if pos.side == "long" else (row["high"] >= pos.stop_price)
         if stop_hit:
-            reason = "breakeven_stop" if pos.partial_time is not None else "stop_loss"
+            if pos.partial_time is not None:
+                reason = "breakeven_stop"
+            elif pos.stop_tightened:
+                reason = "tightened_stop"
+            else:
+                reason = "stop_loss"
             self._close_position(row["timestamp"], pos.stop_price, reason)
             return
 
