@@ -5,3 +5,4 @@ venv/
 data/*.csv
 results/
 .env
+daten/*.csv
