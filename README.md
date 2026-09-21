@@ -6,14 +6,14 @@ mit dem übergeordneten Trend und bei echter Volatilitätsexpansion. Standard-Ze
 **5-Minuten** (deutlich robuster als 1-Minuten, siehe "Hinweise" unten) — der `timeframe`-Parameter
 bleibt frei wählbar.
 
-**Ehrlicher Status (siehe "Hinweise" unten für die volle Historie):** Nach Retuning der
-Einstiegsfilter (`lookback`, `volume_multiplier`) auf einem echten Train/Test-Split über 2,5 Jahre
-5m-Daten zeigt die Strategie erstmals einen auf allen drei unabhängigen Fenstern (Dev-H1, Dev-H2,
-komplett ungesehener Test) robusten **Profit-Faktor von 1.13-1.19**. Über den vollen 2,5-Jahres-
-Datensatz: 242 Trades, 55.4 % Trefferquote, Profit-Faktor 1.16, +14.3 % Rendite, positiver Sharpe
-(0.39). Frühere Meldungen (PF 1.27 auf 6 Monaten, dann PF ~1.0 auf dem größeren Datensatz vor
-diesem Retuning) sind in der Historie unten dokumentiert — dieser Stand ist der bisher am
-gründlichsten validierte.
+**Ehrlicher Status (siehe "Hinweise" unten für die volle Historie):** Auf BTC/USDT zeigt die
+Strategie nach Retuning einen über Zeit robusten **Profit-Faktor von 1.13-1.19** (Dev-H1, Dev-H2,
+komplett ungesehener Test-Zeitraum, alle drei positiv; 242 Trades über 2,5 Jahre, PF 1.16,
++14.3 %, Sharpe 0.39). **Aber:** Ein Cross-Asset-Test mit denselben, unveränderten Parametern auf
+ETH/USDT (899 Tage, 289 Trades) zeigt das Gegenteil - konsistent negativ auf **allen** vier
+getesteten Fenstern (PF 0.82-0.88, insgesamt -46.6 %). Die zeitliche Robustheit auf BTC beweist
+also keinen allgemeinen, marktübergreifenden Edge - möglicherweise BTC-spezifisches
+Marktverhalten statt eines echten, übertragbaren Musters. Details in der Historie unten.
 
 ## Strategie
 
@@ -288,20 +288,43 @@ config.yaml     # Standard-Parameter
       unverändert von der kleinen Datenmenge übernommen): Ein weiterer, engerer Volumen-Schwellwert
       (2.0 statt 1.5) und größerer Lookback (20 statt 15) filtern deutlich schärfer - 242 statt 301
       Trades, aber mit echtem statt nur zufälligem Edge.
+  13. **Konfluenz-Filter-Sweep** (`confluence_fn`-Hook in `backtest.py`, neu): 14
+      Indikator-Bestätigungsfilter (RSI/Stochastic/Williams-%R/CCI/Bollinger) zusätzlich zu den
+      bestehenden Filtern getestet. Bester Fund (RSI(14) < 25 bzw. > 75): Dev PF 1.51 (H1 1.41 /
+      H2 1.69), Held-out-Test PF 2.41 bei 72 % Trefferquote - aber nur noch 45 Dev- bzw. 18
+      Test-Trades. **Verworfen**: Zu kleine Stichprobe für Vertrauen, und im selben Sweep zeigte
+      Stochastic(10/90) bei ähnlich wenigen Trades eine absurde Diskrepanz zwischen den Hälften
+      (H1-PF 0.71 vs. H2-PF 6.39) - ein klares Warnsignal, wie instabil Ergebnisse bei so wenigen
+      Trades werden. Der `confluence_fn`-Mechanismus bleibt im Code verfügbar, ist aber nicht
+      Teil der Standardkonfiguration.
+  14. **Cross-Asset-Test mit ETH/USDT** (899 Tage, dieselben unveränderten, auf BTC validierten
+      Parameter, keine Neuoptimierung): **Konsistenter Fehlschlag auf allen vier getesteten
+      Fenstern** - Dev-H1 PF 0.82, Dev-H2 PF 0.88, Held-out-Test PF 0.83, Gesamt (289 Trades)
+      PF 0.84 und -46.6 % Rendite. Anders als der fragile Konfluenz-Filter-Fund in Schritt 13 ist
+      das ein **großes, konsistentes Sample über vier unabhängige Fenster** - kein
+      Stichprobenartefakt, sondern ein robuster negativer Befund. **Konsequenz: Der auf BTC
+      gefundene, zeitlich robuste Edge (Schritt 12) ist nicht marktübergreifend.** Er könnte
+      BTC-spezifisches Verhalten (Liquiditätsstruktur, historische Eigenheiten dieses einen
+      Assets) widerspiegeln statt eines echten, auf Krypto-Märkte allgemein übertragbaren
+      Fade-Musters.
 
-**Ehrliches Gesamtfazit:** Nach allen Verbesserungsrunden dieser Session, zuletzt dem Retuning der
-Einstiegsfilter auf 2,5 Jahren Daten mit echtem Train/Test-Split, zeigt die Fade-Strategie einen
-**Profit-Faktor von ~1.16-1.19**, robust über drei unabhängige Zeitfenster (Dev-H1, Dev-H2,
-komplett ungesehener Test) - der erste Befund dieser Session, der diesen Test besteht. Das ist
-kein garantierter Gewinn (899 Tage / 242 Trades bleiben eine begrenzte Stichprobe, und Krypto-
-Marktregime können sich ändern), aber deutlich mehr als reines Rauschen: Die Inside-Bar-Strategie
-und das 100-Strategien-Labor zeigten durchgehend, dass rohe Signale und Follow-Ansätze auf diesem
-Zeitrahmen keinen Edge haben - erst die Kombination aus Fade-Logik, vollem Trade-Management
-(Bestätigung, Ablehnungskerze, Trendfilter, Teilausstieg) UND sorgfältig auf ausreichend langen,
-echten Out-of-Sample-Daten getunten Schwellenwerten liefert ein robustes Ergebnis.
-**Wichtigste Lektion dieser Session:** Bei kleinen Trade-Zahlen und kurzen Testfenstern immer
+**Ehrliches Gesamtfazit:** Die Fade-Strategie zeigt auf BTC/USDT einen über Zeit robusten
+Profit-Faktor von ~1.16 (Dev-H1, Dev-H2, komplett ungesehener Test-Zeitraum, alle positiv) - der
+einzige Befund dieser Session, der eine zeitliche Robustheitsprüfung besteht. Aber der
+Cross-Asset-Test auf ETH/USDT relativiert das erheblich: Dieselben Parameter verlieren dort
+konsistent Geld über alle vier unabhängigen Fenster. Das bedeutet **nicht zwingend**, dass der
+BTC-Befund reines Rauschen ist (zeitliche Robustheit über 2,5 Jahre ist ein echtes Signal), aber
+es bedeutet, dass er **nicht als allgemeiner, marktübergreifender Edge gelten kann** - bestenfalls
+als möglicherweise BTC-spezifisches Muster, das vor jedem Live-Einsatz weiter hinterfragt werden
+müsste (z.B.: funktioniert es auf noch mehr Assets? Auf noch längerer BTC-Historie? Was
+unterscheidet BTC strukturell von ETH, das diesen Unterschied erklären könnte?). Die Inside-Bar-
+Strategie und das 100-Strategien-Labor zeigten durchgehend, dass rohe Signale und Follow-Ansätze
+auf diesem Zeitrahmen keinen Edge haben.
+**Wichtigste Lektionen dieser Session:** (1) Bei kleinen Trade-Zahlen und kurzen Testfenstern immer
 gegen mehrere, möglichst lange und wirklich ungesehene Zeiträume prüfen - sowohl der beste
 Aggregat-Wert als auch ein interner Split auf einem zu kurzen Fenster können in die Irre führen.
+(2) Zeitliche Robustheit auf einem einzigen Asset ist keine Garantie für einen echten,
+marktübergreifenden Edge - ein Cross-Asset-Test ist eine eigene, notwendige Validierungsebene.
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der
