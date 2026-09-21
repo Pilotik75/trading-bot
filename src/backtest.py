@@ -77,6 +77,7 @@ class Backtester:
         vol_lookback=100,
         vol_expansion_multiplier=1.2,
         wick_body_ratio=1.0,
+        confluence_fn=None,
     ):
         self.initial_capital = capital
         self.capital = capital
@@ -99,6 +100,10 @@ class Backtester:
         self.vol_lookback = vol_lookback
         self.vol_expansion_multiplier = vol_expansion_multiplier
         self.wick_body_ratio = wick_body_ratio
+        # Optionaler zusätzlicher Bestätigungsfilter: callable(row, trade_side) -> bool.
+        # Läuft auf der Bestätigungskerze, zusätzlich zu Ablehnungskerze/Trend/Volumen - z.B.
+        # ein klassischer Indikator (RSI, Stochastic, ...), der in dieselbe Richtung zeigen muss.
+        self.confluence_fn = confluence_fn
 
         self.trades: List[Trade] = []
         self.equity_curve = []
@@ -180,6 +185,9 @@ class Backtester:
         self._pending = None
 
         if not has_rejection_wick(row, breakout_side, self.wick_body_ratio):
+            return
+
+        if self.confluence_fn is not None and not self.confluence_fn(row, signal):
             return
 
         stop_distance = row["atr"] * self.atr_multiplier
