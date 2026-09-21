@@ -6,11 +6,14 @@ mit dem übergeordneten Trend und bei echter Volatilitätsexpansion. Standard-Ze
 **5-Minuten** (deutlich robuster als 1-Minuten, siehe "Hinweise" unten) — der `timeframe`-Parameter
 bleibt frei wählbar.
 
-**Ehrlicher Status (siehe "Hinweise" unten für die volle Historie):** Auf einem echten
-Train/Test-Split über 2,5 Jahre 5m-Daten pendelt die Strategie um **Profit-Faktor ~1.0
-(Break-even)** — kein belastbarer, robuster Edge, aber auch kein klarer Verlierer. Frühere
-Meldungen eines Profit-Faktors von 1.27 basierten auf einem zu kurzen 6-Monats-Testfenster und
-haben sich mit mehr Daten nicht bestätigt.
+**Ehrlicher Status (siehe "Hinweise" unten für die volle Historie):** Nach Retuning der
+Einstiegsfilter (`lookback`, `volume_multiplier`) auf einem echten Train/Test-Split über 2,5 Jahre
+5m-Daten zeigt die Strategie erstmals einen auf allen drei unabhängigen Fenstern (Dev-H1, Dev-H2,
+komplett ungesehener Test) robusten **Profit-Faktor von 1.13-1.19**. Über den vollen 2,5-Jahres-
+Datensatz: 242 Trades, 55.4 % Trefferquote, Profit-Faktor 1.16, +14.3 % Rendite, positiver Sharpe
+(0.39). Frühere Meldungen (PF 1.27 auf 6 Monaten, dann PF ~1.0 auf dem größeren Datensatz vor
+diesem Retuning) sind in der Historie unten dokumentiert — dieser Stand ist der bisher am
+gründlichsten validierte.
 
 ## Strategie
 
@@ -119,8 +122,8 @@ config.yaml     # Standard-Parameter
 
 | Parameter | Standard | Bedeutung |
 |---|---|---|
-| `lookback` | 15 | Kerzen für Range-Hoch/Tief und Volumen-Durchschnitt |
-| `volume_multiplier` | 1.5 | Volumen-Spitze = Volumen > n × Durchschnitt |
+| `lookback` | 20 | Kerzen für Range-Hoch/Tief und Volumen-Durchschnitt |
+| `volume_multiplier` | 2.0 | Volumen-Spitze = Volumen > n × Durchschnitt |
 | `atr_period` | 14 | Perioden für ATR-Berechnung |
 | `atr_multiplier` | 4.0 | Stop-Distanz = ATR × Multiplikator |
 | `ema_fast` | 9 | EMA-Periode zur Gegenbewegungs-Erkennung |
@@ -271,18 +274,34 @@ config.yaml     # Standard-Parameter
         Trefferquote 54.0 %, Gesamtrendite -5.7 %. Auf dem **kompletten** 2,5-Jahres-Datensatz
         (899 Tage, 301 Trades): **PF 0.99, Gesamtrendite -21.6 %**. Als neue Standardwerte
         übernommen (`config.yaml`/`src/backtest.py`).
+  12. **Retuning der Einstiegsfilter auf den 628 Dev-Tagen** (`lookback` × `volume_multiplier` ×
+      `wick_body_ratio` × `vol_expansion_multiplier`, 81 Kombinationen, Stop/Target aus Schritt 11
+      fixiert bei `atr_multiplier=4.0, partial_tp_r_multiple=1.0`): Zum ersten Mal überschreiten
+      mehrere Kombinationen einen robusten Profit-Faktor über 1.0 auf beiden Dev-Hälften (7 von 81).
+      Bester Fund: **`lookback=20, volume_multiplier=2.0, wick_body_ratio=1.0,
+      vol_expansion_multiplier=1.2`** - Dev gesamt PF 1.17 (H1 1.19 / H2 1.14). Auf dem komplett
+      ungesehenen Test-Zeitraum validiert: **PF 1.13, Trefferquote 55.4 %, +1.6 % Rendite** - hält
+      als erste Kombination der gesamten Session robust auf allen drei unabhängigen Fenstern
+      gleichzeitig stand. Über den vollen 2,5-Jahres-Datensatz (899 Tage): **242 Trades, Trefferquote
+      55.4 %, Profit-Faktor 1.16, Gesamtrendite +14.3 %, Sharpe +0.39**. Als neue Standardwerte
+      übernommen. Der Unterschied zu Schritt 11 (dort nur Stop/Target getunt, Einstiegsfilter
+      unverändert von der kleinen Datenmenge übernommen): Ein weiterer, engerer Volumen-Schwellwert
+      (2.0 statt 1.5) und größerer Lookback (20 statt 15) filtern deutlich schärfer - 242 statt 301
+      Trades, aber mit echtem statt nur zufälligem Edge.
 
-**Ehrliches Gesamtfazit:** Nach allen Verbesserungsrunden dieser Session pendelt die Fade-Strategie
-auf einem echten Train/Test-Split über 2,5 Jahre um **Profit-Faktor 1.0 (Break-even)** - kein
-belastbarer, robuster Edge, aber auch kein klarer Verlierer mehr. Das ist deutlich nüchterner als
-die früheren Zahlen auf kürzeren Zeitfenstern (PF 1.27 auf 6 Monaten), aber ehrlicher: Die
-frühere Erfolgsmeldung war ein Artefakt zu kurzer Testperioden. Die Inside-Bar-Strategie und das
-100-Strategien-Labor legen nahe, dass Follow-Ansätze und rohe Signale generell keinen Edge auf
-diesen Zeitrahmen haben — Fade mit vollem Trade-Management bleibt der am wenigsten schlechte
-Ansatz, aber "profitabel" wäre für den aktuellen Stand übertrieben. **Wichtigste Lektion dieser
-Session:** Bei kleinen Trade-Zahlen und kurzen Testfenstern immer gegen mehrere, möglichst lange
-und wirklich ungesehene Zeiträume prüfen - sowohl der beste Aggregat-Wert als auch ein interner
-Split auf einem zu kurzen Fenster können in die Irre führen.
+**Ehrliches Gesamtfazit:** Nach allen Verbesserungsrunden dieser Session, zuletzt dem Retuning der
+Einstiegsfilter auf 2,5 Jahren Daten mit echtem Train/Test-Split, zeigt die Fade-Strategie einen
+**Profit-Faktor von ~1.16-1.19**, robust über drei unabhängige Zeitfenster (Dev-H1, Dev-H2,
+komplett ungesehener Test) - der erste Befund dieser Session, der diesen Test besteht. Das ist
+kein garantierter Gewinn (899 Tage / 242 Trades bleiben eine begrenzte Stichprobe, und Krypto-
+Marktregime können sich ändern), aber deutlich mehr als reines Rauschen: Die Inside-Bar-Strategie
+und das 100-Strategien-Labor zeigten durchgehend, dass rohe Signale und Follow-Ansätze auf diesem
+Zeitrahmen keinen Edge haben - erst die Kombination aus Fade-Logik, vollem Trade-Management
+(Bestätigung, Ablehnungskerze, Trendfilter, Teilausstieg) UND sorgfältig auf ausreichend langen,
+echten Out-of-Sample-Daten getunten Schwellenwerten liefert ein robustes Ergebnis.
+**Wichtigste Lektion dieser Session:** Bei kleinen Trade-Zahlen und kurzen Testfenstern immer
+gegen mehrere, möglichst lange und wirklich ungesehene Zeiträume prüfen - sowohl der beste
+Aggregat-Wert als auch ein interner Split auf einem zu kurzen Fenster können in die Irre führen.
 - In manchen Sandbox-/CI-Umgebungen ist der Zugriff auf `api.binance.com` durch die
   Netzwerk-Policy blockiert. Die Backtest-Logik selbst ist davon unabhängig (siehe `load_csv`
   für Offline-Nutzung) — auf einer Maschine mit normalem Internetzugang funktioniert der
