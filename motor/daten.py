@@ -38,13 +38,30 @@ def lade_historische_daten(
     os.makedirs(ORDNER, exist_ok=True)
     pfad = _dateiname(symbol, timeframe)
 
+    df = None
     if os.path.exists(pfad) and not neu_laden:
         df = pd.read_csv(pfad, parse_dates=["timestamp"])
-    else:
+        if not _deckt_zeitraum_ab(df, von, bis):
+            df = None  # Cache deckt den angeforderten Zeitraum nicht ab.
+
+    if df is None:
         df = _von_bybit_laden(symbol, timeframe, von, bis)
         df.to_csv(pfad, index=False)
 
     return _zeitraum_filtern(df, von, bis)
+
+
+def _deckt_zeitraum_ab(df: pd.DataFrame, von: str, bis: str) -> bool:
+    """Prüft, ob die gecachten Daten den angeforderten Zeitraum abdecken -
+    sonst würde man unbemerkt mit weniger Daten als gewünscht arbeiten."""
+    if df.empty:
+        return False
+    if von and df["timestamp"].min() > pd.Timestamp(von):
+        return False
+    bis_soll = pd.Timestamp(bis) if bis else pd.Timestamp.now()
+    if df["timestamp"].max() < bis_soll - pd.Timedelta(days=1):
+        return False
+    return True
 
 
 def _zeitraum_filtern(df: pd.DataFrame, von: str, bis: str) -> pd.DataFrame:
